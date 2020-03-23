@@ -1,6 +1,6 @@
 {
     "name": "supham/php-share",
-    "keywords": ["composer", "shared library"],
+    "keywords": ["composer", "shared library", "symlink"],
     "type": "composer-plugin",
     "license": "MIT",
     "require": {
