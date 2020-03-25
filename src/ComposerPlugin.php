@@ -3,6 +3,7 @@ namespace Supham\Phpshare;
 
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\Plugin\PluginInterface;
+use Composer\DependencyResolver\Rule;
 
 class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 {
@@ -29,6 +30,25 @@ class ComposerPlugin implements PluginInterface, EventSubscriberInterface
 
     public static function getSubscribedEvents()
     {
-        return [];
+        return [
+            'pre-package-install' => 'prePackageInstall',
+            'pre-package-update' => 'prePackageInstall',
+        ];
+    }
+
+    public function prePackageInstall($event)
+    {
+        $reason = $event->getOperation()->getReason();
+        $libInstaller = $this->composer->getInstallationManager()->getInstaller('default');
+        $libInstaller->setRequestedPackage(null);
+
+        if ($reason instanceof Rule) {
+            if ($job = $reason->getJob()) {
+                $package = $job['packageName'] .'/'. $job['constraint']->getPrettyString();
+            } elseif ($reasonData = $reason->getReasonData() and is_object($reasonData)) {
+                $package = $reasonData->getTarget() .'/'. $reasonData->getConstraint()->getPrettyString();
+            }
+            $libInstaller->setRequestedPackage($package);
+        }
     }
 }
