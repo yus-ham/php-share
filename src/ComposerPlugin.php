@@ -1,11 +1,18 @@
 <?php
 namespace Supham\Phpshare;
 
+use Composer\DependencyResolver\Rule;
 use Composer\EventDispatcher\EventSubscriberInterface;
 use Composer\Plugin\PluginInterface;
-use Composer\DependencyResolver\Rule;
+use Composer\Plugin\Capability\CommandProvider;
+use Composer\Plugin\Capable;
 
-class ComposerPlugin implements PluginInterface, EventSubscriberInterface
+class ComposerPlugin
+implements
+    PluginInterface,
+    EventSubscriberInterface,
+    CommandProvider,
+    Capable
 {
     protected $composer;
 
@@ -50,5 +57,15 @@ class ComposerPlugin implements PluginInterface, EventSubscriberInterface
             }
             $libInstaller->setRequestedPackage($package);
         }
+    }
+
+    public function getCapabilities()
+    {
+        return [CommandProvider::class => __CLASS__];
+    }
+
+    public function getCommands()
+    {
+        return [new ClearOrphanedCommand()];
     }
 }
