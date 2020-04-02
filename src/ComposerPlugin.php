@@ -3,16 +3,17 @@ namespace Supham\Phpshare;
 
 use Composer\DependencyResolver\Rule;
 use Composer\EventDispatcher\EventSubscriberInterface;
-use Composer\Plugin\PluginInterface;
+use Composer\Package\AliasPackage;
 use Composer\Plugin\Capability\CommandProvider;
 use Composer\Plugin\Capable;
+use Composer\Plugin\PluginInterface;
 
 class ComposerPlugin
 implements
-    PluginInterface,
-    EventSubscriberInterface,
+    Capable,
     CommandProvider,
-    Capable
+    EventSubscriberInterface,
+    PluginInterface
 {
     protected $composer;
 
@@ -47,16 +48,18 @@ implements
     {
         $reason = $event->getOperation()->getReason();
         $libInstaller = $this->composer->getInstallationManager()->getInstaller('default');
-        $libInstaller->setRequestedPackage(null);
 
-        if ($reason instanceof Rule) {
-            if ($job = $reason->getJob()) {
-                $package = $job['packageName'] .'/'. $job['constraint']->getPrettyString();
-            } elseif ($reasonData = $reason->getReasonData() and is_object($reasonData)) {
-                $package = $reasonData->getTarget() .'/'. $reasonData->getConstraint()->getPrettyString();
-            }
-            $libInstaller->setRequestedPackage($package);
+        if (!$reason instanceof Rule) {
+            $package = null;
+        } elseif ($job = $reason->getJob()) {
+            $package = $job['packageName'] .'/'. $job['constraint']->getPrettyString();
+        } elseif ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
+            $package = $reasonData->getName() .'/'. $reasonData->getPrettyVersion();
+        } elseif (is_object($reasonData)) {
+            $package = $reasonData->getTarget() .'/'. $reasonData->getConstraint()->getPrettyString();
         }
+
+        $libInstaller->setRequestedPackage($package);
     }
 
     public function getCapabilities()
