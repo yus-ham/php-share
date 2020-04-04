@@ -107,21 +107,12 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function removeCode($package)
     {
+        $installPath = $this->getInstallPath($package);
+
         echo '  ['.__METHOD__.']'.PHP_EOL;
-        $linkTarget = $this->getPackageBasePath($package);
-        $this->unlink($package, $this->getPackageDownloadPath($package), $linkTarget);
-    }
+        echo "  - Delete symlink vendor/". $package->getName() ." -> ". readlink($installPath) ."\n";
 
-    protected function link($src, $linkTarget)
-    {
-        @unlink($linkTarget);
-
-        try {
-            $this->linkPackage($src, $linkTarget);
-            $this->saveLink($src, $linkTarget);
-        } catch (\Exception $e) {
-            $this->io->writeError(sprintf("\nError: %s", $e->getMessage()), false);
-        }
+        $this->filesystem->removeDirectory($installPath);
     }
 
     protected function linkPackage($src, $linkTarget)
@@ -135,43 +126,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
             $this->io->writeError(sprintf("  - Symlinking %s -> %s\n", $linkTarget, $src), false);
             $this->fs->symlink($src, $linkTarget);
         }
-    }
-
-    protected function saveLink($src, $linkTarget)
-    {
-        $linksFile = "$src.links";
-        $links = @file_get_contents($linksFile);
-        $alreadyLinked = $links && strpos("$linkTarget\n", $links) !== false;
-
-        if (!$alreadyLinked) {
-            file_put_contents("$src.links", "$linkTarget\n", LOCK_EX|FILE_APPEND);
-        }
-    }
-
-    protected function unlink($srcPackage, $srcPath, $linkTarget)
-    {
-        echo "  - Delete symlink vendor/". $srcPackage->getName() ." -> $srcPath\n";
-
-        @unlink($linkTarget);
-        $linksFile = "$srcPath.links";
-
-        if (!is_file($linksFile)) {
-            return;
-        }
-        $links = (array)file($linksFile);
-        foreach ($links as $i => $link) {
-            if (trim($link) === $linkTarget) {
-                unset($links[$i]);
-            }
-        }
-
-        if ($links) {
-            return file_put_contents($linksFile, $links, LOCK_EX);
-        }
-        unlink($linksFile);
-        $this->filesystem->removeDirectory($srcPath);
-
-        // TODO: delete empty folder
     }
 
     public function getPackageDownloadPath($package)
