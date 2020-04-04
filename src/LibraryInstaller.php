@@ -136,7 +136,9 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function getConstraintPath()
     {
-        return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". strtr($this->requestedPackage, self::$transOpName);
+        $version = strtr($this->requestedPackage, self::$transOpName);
+        $version = preg_replace('/ +/', '_', $version);
+        return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $version;
     }
 
     /**
