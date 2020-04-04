@@ -126,7 +126,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function linkPackage($src, $linkTarget)
     {
-        @unlink($linkTarget);
+        $this->filesystem->removeDirectory($linkTarget);
         if (Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
             $this->io->writeError(sprintf("  - Junctioning %s -> %s\n", $linkTarget, $src), false);
