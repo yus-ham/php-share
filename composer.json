@@ -1,8 +1,18 @@
 {
     "name": "supham/php-share",
+    "description": "Sharing common used php package to multiple projects.",
     "keywords": ["composer", "shared library", "symlink"],
     "type": "composer-plugin",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Yusup Hambali",
+            "email": "supalpuket@gmail.com"
+        }
+    ],
+    "support": {
+        "source": "https://github.com/sup-ham/php-share"
+    },
     "require": {
         "composer-plugin-api": "^1.0"
     },
@@ -11,13 +21,10 @@
     },
     "autoload": {
         "psr-4": {
-            "Supham\\Phpshare\\": "src"
+            "Supham\\Phpshare\\Composer\\": "src"
         }
     },
     "extra": {
-        "branch-alias": {
-            "dev-master": "1.x-dev"
-        },
-        "class": "Supham\\Phpshare\\ComposerPlugin"
+        "class": "Supham\\Phpshare\\Composer\\Plugin"
     }
 }

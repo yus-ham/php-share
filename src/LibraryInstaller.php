@@ -1,6 +1,10 @@
 <?php
-namespace Supham\Phpshare;
+namespace Supham\Phpshare\Composer;
 
+use Composer\Installer\BinaryInstaller;
+use Composer\Package\PackageInterface;
+use Composer\Repository\InstalledRepositoryInterface;
+use Composer\Util\Filesystem as ComposerFS;
 use Composer\Util\Platform;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -8,7 +12,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 {
     protected $fs;
     protected $sharedVendorDir = 'shared';
-    protected $requestedPackage;
 
     private static $transOpName = [
         '==' => 'eq',
@@ -27,36 +30,109 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         '|'    => ' or ',
     ];
 
-    public function __construct($io, $composer, $old)
+    public function __construct($io, $composer, $type = 'library', $old = null)
     {
-        $this->composer = $old->composer;
-        $this->downloadManager = $old->downloadManager;
-        $this->io = $old->io;
-        $this->type = null;
-        $this->filesystem = $old->filesystem;
-        $this->vendorDir = $old->vendorDir;
-        $this->binaryInstaller = $old->binaryInstaller;
+        if ($old) {
+            $this->io = $old->io;
+            $this->composer = $old->composer;
+            $this->type = $type;
+            $this->downloadManager = $old->downloadManager;
+            $this->filesystem = $old->filesystem;
+            $this->vendorDir = $old->vendorDir;
+            $this->binaryInstaller = $old->binaryInstaller;
+        } else {
+            parent::__construct($io, $composer, $type);
+        }
         $this->fs = new Filesystem();
+    }
+
+    private static function isPlugin($type)
+    {
+        return $type === 'composer-plugin';
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
+    {
+        parent::install($repo, $package);
+
+        if (!self::isPlugin($package->getType())) {
+            return;
+        }
+        try {
+            $extra = $this->composer->getPluginManager()->getGlobalComposer()->getPackage()->getExtra();
+            $installers = array();
+
+            if (isset($extra['lib-installers'])) {
+                $installers = (array)$extra['lib-installers'];
+            }
+
+            $autoload = $package->getAutoload();
+            $installPath = $this->getInstallPath($package);
+            $prefix = $package->getName();
+
+            foreach ($installers as $class) {
+                $file = strtr($class, [$prefix => $installPath]);
+                if (!is_file($file)) {
+                    continue;
+                }
+                $code = file_get_contents($file);
+                if (strpos($code, 'extends LibraryInstaller')) {
+                  $code = str_replace('extends LibraryInstaller', 'extends \\'.__CLASS__, $code);
+                  file_put_contents($file, $code);
+                }
+            }
+
+            $this->composer->getPluginManager()->registerPackage($package, true);
+        } catch (\Exception $e) {
+            // Rollback installation
+            $this->io->writeError('Plugin installation failed, rolling back');
+            parent::uninstall($repo, $package);
+            throw $e;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
+    {
+        if ($isPlugin = self::isPlugin($target->getType())) {
+            $extra = $target->getExtra();
+            if (empty($extra['class'])) {
+                throw new \UnexpectedValueException('Error while installing '.$target->getPrettyName().', composer-plugin packages should have a class defined in their extra key to be usable.');
+            }
+        }
+
+        parent::update($repo, $initial, $target);
+
+        if ($isPlugin) {
+            $this->composer->getPluginManager()->registerPackage($target, true);
+        }
     }
 
     protected function installCode($package)
     {
-        echo PHP_EOL.'  ['.__METHOD__.']'.PHP_EOL;
-
         $downloadPath = $this->getPackageDownloadPath($package);
         $constraintPath = $this->getConstraintPath();
         $packagePath = $this->getInstallPath($package);
 
         if (!is_dir($downloadPath)) {
+            @unlink($downloadPath);
+            @unlink($constraintPath);
             $this->downloadManager->download($package, $downloadPath);
         }
-        $this->linkPackage($downloadPath, $constraintPath);
+        if (!is_dir($constraintPath)) {
+            @unlink($constraintPath);
+            $this->linkPackage($downloadPath, $constraintPath);
+        }
         $this->linkPackage($constraintPath, $packagePath);
     }
 
     protected function updateCode($initial, $target)
     {
-        echo '  ['.__METHOD__.']'.PHP_EOL;
         $initialDownloadPath = $this->getInstallPath($initial); // vend/lib
         $targetDownloadPath = $this->getPackageDownloadPath($target); // shared/ven/lib
         $this->downloadUpdateCode($initial, $target, $targetDownloadPath);
@@ -64,7 +140,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function downloadUpdateCode($initial, $target, $sharedDir)
     {
-        echo '  ['.__METHOD__.']'.PHP_EOL;
         $downloadPath = $this->getPackageDownloadPath($target); // shared/ven/lib
         $initialPath = $this->getPackageDownloadPath($initial);
         $packageParh = $this->getInstallPath($target);
@@ -108,10 +183,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     protected function removeCode($package)
     {
         $installPath = $this->getInstallPath($package);
-
-        echo '  ['.__METHOD__.']'.PHP_EOL;
-        echo "  - Delete symlink vendor/". $package->getName() ." -> ". readlink($installPath) ."\n";
-
         $this->filesystem->removeDirectory($installPath);
     }
 
@@ -136,16 +207,8 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function getConstraintPath()
     {
-        $version = strtr($this->requestedPackage, self::$transOpName);
+        $version = strtr(Plugin::getInstance()->getRequestedPackage(), self::$transOpName);
         $version = preg_replace('/ +/', '_', $version);
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $version;
-    }
-
-    /**
-     * @param string $package package name and the requested version constraint
-     */
-    public function setRequestedPackage($package)
-    {
-        return $this->requestedPackage = $package;
     }
 }

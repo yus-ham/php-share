@@ -1,5 +1,5 @@
 <?php
-namespace Supham\Phpshare;
+namespace Supham\Phpshare\Composer;
 
 use Composer\Util\Platform;
 use Composer\Util\Filesystem;
