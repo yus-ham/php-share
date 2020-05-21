@@ -17,11 +17,10 @@ class Plugin implements
     protected $composer;
     protected $io;
     private $requestedPackage;
-    private static $self;
 
     public function activate($composer, $io)
     {
-        self::$self = $this;
+        $GLOBALS['Supham\Phpshare\Composer\Plugin'] = $this;
         $this->io = $io;
         $this->composer = $composer;
         $this->setLibraryInstaller();
@@ -29,7 +28,7 @@ class Plugin implements
 
     public static function getInstance()
     {
-        return self::$self;
+        return $GLOBALS['Supham\Phpshare\Composer\Plugin'];
     }
 
     protected function setLibraryInstaller()
@@ -59,9 +58,7 @@ class Plugin implements
         } elseif ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
             $package = $reasonData->getName() .'/'. $reasonData->getPrettyVersion();
         } elseif (is_object($reasonData)) {
-                $package = $reasonData->getTarget() .'/'. $reasonData->getConstraint()->getPrettyString();
-        } else {
-            $package = 'unknown';
+            $package = $reasonData->getTarget() .'/'. $reasonData->getConstraint()->getPrettyString();
         }
         $this->requestedPackage = $package;
     }
