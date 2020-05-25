@@ -4,7 +4,6 @@ namespace Supham\Phpshare\Composer;
 use Composer\Installer\BinaryInstaller;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
-use Composer\Util\Filesystem as ComposerFS;
 use Composer\Util\Platform;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -115,18 +114,18 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function installCode($package)
     {
-        $downloadPath = $this->getPackageDownloadPath($package);
+        $packageSavePath = $this->getPackageDownloadPath($package);
         $constraintPath = $this->getConstraintPath();
         $packagePath = $this->getInstallPath($package);
 
-        if (!is_dir($downloadPath)) {
-            @unlink($downloadPath);
+        if (!is_dir($packageSavePath)) {
+            @unlink($packageSavePath);
             @unlink($constraintPath);
-            $this->downloadManager->download($package, $downloadPath);
+            $this->downloadManager->download($package, $packageSavePath);
         }
         if (!is_dir($constraintPath)) {
             @unlink($constraintPath);
-            $this->linkPackage($downloadPath, $constraintPath);
+            $this->linkPackage($packageSavePath, $constraintPath);
         }
         $this->linkPackage($constraintPath, $packagePath);
     }
@@ -188,7 +187,9 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function linkPackage($src, $linkTarget)
     {
+        $this->filesystem->ensureDirectoryExists(dirname($linkTarget));
         $this->filesystem->removeDirectory($linkTarget);
+
         if (Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
             $this->io->writeError(sprintf("  - Junctioning %s -> %s\n", $linkTarget, $src), false);
@@ -199,7 +200,16 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
     }
 
-    public function getPackageDownloadPath($package)
+    /**
+     * {@inheritDoc}
+     */
+    public function getInstallPath(PackageInterface $package)
+    {
+        $path = strtr(parent::getInstallPath($package), '/', DIRECTORY_SEPARATOR);
+        return $this->filesystem->normalizePath($path);
+    }
+
+    public function getPackageDownloadPath(PackageInterface $package)
     {
         $version = $package->isDev() ? ($package->getSourceReference() ?: 'dev-master') : $package->getPrettyVersion();
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $package->getName() .'/'. $version;
