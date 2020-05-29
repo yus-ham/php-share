@@ -1,7 +1,6 @@
 <?php
 namespace Supham\Phpshare\Composer;
 
-use Composer\Installer\BinaryInstaller;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
 use Composer\Util\Platform;
@@ -196,10 +195,10 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
         if (Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
-            $this->io->writeError(sprintf("  - Junctioning %s -> %s\n", $linkTarget, $src), false);
+            $this->io->writeError(sprintf("\n    [php-share] Junctioning %s -> %s\n", $linkTarget, $src), false);
             $this->filesystem->junction($src, $linkTarget);
         } else {
-            $this->io->writeError(sprintf("  - Symlinking %s -> %s\n", $linkTarget, $src), false);
+            $this->io->writeError(sprintf("\n    [php-share] Symlinking %s -> %s\n", $linkTarget, $src), false);
             $this->fs->symlink($src, $linkTarget);
         }
     }
