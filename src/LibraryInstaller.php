@@ -68,7 +68,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
                 $installers = (array)$extra['lib-installers'];
             }
 
-            $autoload = $package->getAutoload();
             $installPath = $this->getInstallPath($package);
             $prefix = $package->getName();
 
@@ -77,11 +76,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
                 if (!is_file($file)) {
                     continue;
                 }
-                $code = file_get_contents($file);
-                if (strpos($code, 'extends LibraryInstaller')) {
-                  $code = str_replace('extends LibraryInstaller', 'extends \\'.__CLASS__, $code);
-                  file_put_contents($file, $code);
-                }
+                $this->injectInstallerCode($file);
             }
 
             $this->composer->getPluginManager()->registerPackage($package, true);
@@ -91,6 +86,21 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
             parent::uninstall($repo, $package);
             throw $e;
         }
+    }
+
+    protected function injectInstallerCode($file)
+    {
+        $class = __CLASS__;
+        $code = file_get_contents($file);
+        $replacement = ""
+            .PHP_EOL . "// begin php-share plugin code"
+            .PHP_EOL . "if (class_exists('$class', false)) { class LibraryInstallerBase extends \\$class {} }"
+            .PHP_EOL . "else { class LibraryInstallerBase extends \Composer\Installer\LibraryInstaller {} }"
+            .PHP_EOL . "// end php-share plugin code"
+            .PHP_EOL . PHP_EOL . '$0Base';
+
+        $code = preg_replace('/class\s+\w+\s+extends\s+LibraryInstaller\b/s', $replacement, $code);
+        file_put_contents($file, $code);
     }
 
     /**
@@ -133,20 +143,14 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     protected function updateCode($initial, $target)
     {
         $initialDownloadPath = $this->getInstallPath($initial); // vend/lib
+        $initialDownloadPath = realpath($initialDownloadPath);
         $targetDownloadPath = $this->getPackageDownloadPath($target); // shared/ven/lib
-        $this->downloadUpdateCode($initial, $target, $targetDownloadPath);
-    }
-
-    protected function downloadUpdateCode($initial, $target, $sharedDir)
-    {
-        $downloadPath = $this->getPackageDownloadPath($target); // shared/ven/lib
-        $initialPath = $this->getPackageDownloadPath($initial);
-        $packageParh = $this->getInstallPath($target);
         $constraintPath = $this->getConstraintPath();
+        $this->filesystem->rename($initialDownloadPath, $targetDownloadPath);
 
-        if (is_dir($downloadPath)) {
-            $this->linkPackage($downloadPath, $constraintPath);
-            $this->linkPackage($constraintPath, $packageParh);
+        if (is_dir($targetDownloadPath)) {
+            $this->linkPackage($targetDownloadPath, $constraintPath);
+            $this->linkPackage($constraintPath, $initialDownloadPath);
             return;
         }
 
@@ -168,15 +172,15 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
         // upgrading from a dist stable package to a dev package, force source reinstall
         if ($target->isDev() && 'dist' === $installationSource) {
-            $this->downloadManager->download($target, $sharedDir);
-            $this->linkPackage($downloadPath, $constraintPath);
-            $this->linkPackage($constraintPath, $packageParh);
+            $this->downloadManager->download($target, $targetDownloadPath);
+            $this->linkPackage($targetDownloadPath, $constraintPath);
+            $this->linkPackage($constraintPath, $initialDownloadPath);
             return;
         }
 
-        $this->downloadManager->download($target, $downloadPath, 'source' === $installationSource);
-        $this->linkPackage($downloadPath, $constraintPath);
-        $this->linkPackage($constraintPath, $packageParh);
+        $this->downloadManager->download($target, $targetDownloadPath, 'source' === $installationSource);
+        $this->linkPackage($targetDownloadPath, $constraintPath);
+        $this->linkPackage($constraintPath, $initialDownloadPath);
     }
 
     protected function removeCode($package)
