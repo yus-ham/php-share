@@ -23,10 +23,9 @@ project2/vendor/[vendor]/[name] -> ~/.composer/shared/[vendor]/[name]/[version-c
 ~~~
 
 # Extra configuration
-Register custom library installers that comes from any framework. eg. [yiisoft/yii2-composer](https://github.com/yiisoft/yii2-composer/blob/master/Installer.php).
-The clue: Installer is a [subclass of `Composer\Installer\LibraryInstaller`](https://github.com/yiisoft/yii2-composer/blob/64670b37a/Installer.php#L21).
+If any framework shipped a custom library installer, A.K.A a subclass of `Composer\Installer\LibraryInstaller`. you must register it.
 
-Run to add installer entry
+In example, register [yiisoft/yii2-composer/Installer.php](https://github.com/yiisoft/yii2-composer/blob/64670b37a78f94ebf584405e676a6c88fc6b0d4a/Installer.php)
 ~~~bash
 composer g config extra.lib-installers.{index} yiisoft/yii2-composer/Installer.php
 ~~~
