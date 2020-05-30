@@ -1,5 +1,5 @@
 # php-share composer plugin
-Sharing common used php package to multiple projects by symlink.
+Sharing common used composer package to multiple projects by symlink.
 
 # Install globally
 ~~~bash
