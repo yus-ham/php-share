@@ -25,9 +25,6 @@
         }
     },
     "extra": {
-        "class": "Supham\\Phpshare\\Composer\\Plugin",
-        "branch-alias": {
-            "dev-master": "1.0.x-dev"
-        }
+        "class": "Supham\\Phpshare\\Composer\\Plugin"
     }
 }
