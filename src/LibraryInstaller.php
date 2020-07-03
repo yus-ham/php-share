@@ -44,9 +44,9 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         $this->fs = new Filesystem();
     }
 
-    private static function isPlugin($type)
+    private static function isPlugin(PackageInterface $package)
     {
-        return $type === 'composer-plugin';
+        return $package->getType() === 'composer-plugin';
     }
 
     /**
@@ -56,7 +56,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     {
         parent::install($repo, $package);
 
-        if (!self::isPlugin($package->getType())) {
+        if (!self::isPlugin($package)) {
             return;
         }
         try {
@@ -107,7 +107,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
      */
     public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
     {
-        if ($isPlugin = self::isPlugin($target->getType())) {
+        if ($isPlugin = self::isPlugin($target)) {
             $extra = $target->getExtra();
             if (empty($extra['class'])) {
                 throw new \UnexpectedValueException('Error while installing '.$target->getPrettyName().', composer-plugin packages should have a class defined in their extra key to be usable.');
