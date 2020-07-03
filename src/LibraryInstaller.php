@@ -115,18 +115,18 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function installCode($package)
     {
-        $packageSavePath = $this->getPackageDownloadPath($package);
+        $savePath = $this->getPackageSavePath($package);
         $constraintPath = $this->getConstraintPath();
         $packagePath = $this->getInstallPath($package);
 
-        if (!is_dir($packageSavePath)) {
-            @unlink($packageSavePath);
+        if (!is_dir($savePath)) {
+            @unlink($savePath);
             @unlink($constraintPath);
-            $this->downloadManager->download($package, $packageSavePath);
+            $this->downloadManager->download($package, $savePath);
         }
         if (!is_dir($constraintPath)) {
             @unlink($constraintPath);
-            $this->linkPackage($packageSavePath, $constraintPath);
+            $this->linkPackage($savePath, $constraintPath);
         }
         $this->linkPackage($constraintPath, $packagePath);
     }
@@ -135,12 +135,12 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     {
         $initialDownloadPath = $this->getInstallPath($initial); // vend/lib
         $initialDownloadPath = realpath($initialDownloadPath);
-        $targetDownloadPath = $this->getPackageDownloadPath($target); // shared/ven/lib
+        $targetSavePath = $this->getPackageSavePath($target); // shared/ven/lib
         $constraintPath = $this->getConstraintPath();
-        $this->filesystem->rename($initialDownloadPath, $targetDownloadPath);
+        $this->filesystem->rename($initialDownloadPath, $targetSavePath);
 
-        if (is_dir($targetDownloadPath)) {
-            $this->linkPackage($targetDownloadPath, $constraintPath);
+        if (is_dir($targetSavePath)) {
+            $this->linkPackage($targetSavePath, $constraintPath);
             $this->linkPackage($constraintPath, $initialDownloadPath);
             return;
         }
@@ -163,14 +163,14 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
         // upgrading from a dist stable package to a dev package, force source reinstall
         if ($target->isDev() && 'dist' === $installationSource) {
-            $this->downloadManager->download($target, $targetDownloadPath);
-            $this->linkPackage($targetDownloadPath, $constraintPath);
+            $this->downloadManager->download($target, $targetSavePath);
+            $this->linkPackage($targetSavePath, $constraintPath);
             $this->linkPackage($constraintPath, $initialDownloadPath);
             return;
         }
 
-        $this->downloadManager->download($target, $targetDownloadPath, 'source' === $installationSource);
-        $this->linkPackage($targetDownloadPath, $constraintPath);
+        $this->downloadManager->download($target, $targetSavePath, 'source' === $installationSource);
+        $this->linkPackage($targetSavePath, $constraintPath);
         $this->linkPackage($constraintPath, $initialDownloadPath);
     }
 
@@ -180,31 +180,26 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         $this->filesystem->removeDirectory($installPath);
     }
 
-    protected function linkPackage($src, $linkTarget)
+    protected function linkPackage($target, $link)
     {
-        $this->filesystem->ensureDirectoryExists(dirname($linkTarget));
-        $this->filesystem->removeDirectory($linkTarget);
+        $this->filesystem->ensureDirectoryExists(dirname($link));
+        $this->filesystem->removeDirectory($link);
 
         if (Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
-            $this->io->writeError(sprintf("\n    [php-share] Junctioning %s -> %s\n", $linkTarget, $src), false);
-            $this->filesystem->junction($src, $linkTarget);
+            $cwd = getcwd();
+            $relativePath = $this->filesystem->findShortestPath($link, $target);
+            chdir(dirname($link));
+            $this->io->writeError("\n    [php-share] Junctioning $target -> $link\n", false);
+            $this->filesystem->junction($link, $relativePath);
+            chdir($cwd);
         } else {
-            $this->io->writeError(sprintf("\n    [php-share] Symlinking %s -> %s\n", $linkTarget, $src), false);
-            $this->fs->symlink($src, $linkTarget);
+            $this->io->writeError("\n    [php-share] Symlinking $target -> $link\n", false);
+            $this->filesystem->relativeSymlink($target, $link);
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public function getInstallPath(PackageInterface $package)
-    {
-        $path = strtr(parent::getInstallPath($package), '/', DIRECTORY_SEPARATOR);
-        return $this->filesystem->normalizePath($path);
-    }
-
-    public function getPackageDownloadPath(PackageInterface $package)
+    public function getPackageSavePath(PackageInterface $package)
     {
         $version = $package->isDev() ? ($package->getSourceReference() ?: 'dev-master') : $package->getPrettyVersion();
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $package->getName() .'/'. $version;
