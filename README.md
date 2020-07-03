@@ -6,10 +6,5 @@ Sharing common used composer package to multiple projects by symlink.
 composer g require supham/php-share:@dev
 ~~~
 
-# Extra configuration
-If a library depend on a custom library installer, A.K.A a subclass of `Composer\Installer\LibraryInstaller`. you must register path to it.
-
-In example, register [yiisoft/yii2-composer/Installer.php](https://github.com/yiisoft/yii2-composer/blob/64670b37a78f94ebf584405e676a6c88fc6b0d4a/Installer.php)
-~~~bash
-composer g config extra.lib-installers.{index} yiisoft/yii2-composer/Installer.php
-~~~
+# Library Installers
+Maybe sometime symlink not created. it usually caused by the package requires an installer plugin and it must be listed in `installers.php`. You can create PR to add it.

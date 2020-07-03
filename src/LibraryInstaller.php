@@ -60,25 +60,17 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
             return;
         }
         try {
-            $extra = $this->composer->getPluginManager()->getGlobalComposer()->getPackage()->getExtra();
-            $installers = array();
+            $installers = require __DIR__.'/installers.php';
+            $prefix = $this->vendorDir .'/'. $package->getName();
 
-            if (isset($extra['lib-installers'])) {
-                $installers = (array)$extra['lib-installers'];
-            }
-
-            $installPath = $this->getInstallPath($package);
-            $prefix = $package->getName();
-
-            foreach ($installers as $class) {
-                $file = strtr($class, [$prefix => $installPath]);
-                if (!is_file($file)) {
-                    continue;
+            foreach ($installers as $file) {
+                $file = $prefix .'/'. $file;
+                if (is_file($file)) {
+                    $this->injectInstallerCode($file);
                 }
-                $this->injectInstallerCode($file);
             }
-
             $this->composer->getPluginManager()->registerPackage($package, true);
+
         } catch (\Exception $e) {
             // Rollback installation
             $this->io->writeError('Plugin installation failed, rolling back');
