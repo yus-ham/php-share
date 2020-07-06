@@ -43,7 +43,6 @@ class Plugin implements
     {
         return [
             'pre-package-install' => 'prePackageInstall',
-            'pre-package-update' => 'prePackageInstall',
         ];
     }
 

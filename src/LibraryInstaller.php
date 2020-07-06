@@ -133,24 +133,24 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function updateCode($initial, $target)
     {
-        $initialDownloadPath = $this->getInstallPath($initial); // vend/lib
-        $initialDownloadPath = realpath($initialDownloadPath);
+        $initialPath = $this->getInstallPath($initial); // vend/lib
         $targetSavePath = $this->getPackageSavePath($target); // shared/ven/lib
-        $constraintPath = $this->getConstraintPath();
-        $this->filesystem->rename($initialDownloadPath, $targetSavePath);
+        $constraintPath = $this->getConstraintPath($target);
 
         if (is_dir($targetSavePath)) {
             $this->linkPackage($targetSavePath, $constraintPath);
-            $this->linkPackage($constraintPath, $initialDownloadPath);
+            $this->linkPackage($constraintPath, $initialPath);
             return;
         }
 
         $initial->setInstallationSource($initial->getInstallationSource() ?: 'dist');
         $downloader = $this->downloadManager->getDownloaderForInstalledPackage($initial);
+
         if (!$downloader) {
             return;
         }
 
+        $this->filesystem->removeDirectory($initialPath);
         $installationSource = $initial->getInstallationSource();
 
         if ('dist' === $installationSource) {
@@ -161,17 +161,21 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
             $targetType = $target->getSourceType();
         }
 
+        if (is_file($targetSavePath)) {
+            @unlink($targetSavePath);
+        }
+
         // upgrading from a dist stable package to a dev package, force source reinstall
         if ($target->isDev() && 'dist' === $installationSource) {
             $this->downloadManager->download($target, $targetSavePath);
             $this->linkPackage($targetSavePath, $constraintPath);
-            $this->linkPackage($constraintPath, $initialDownloadPath);
+            $this->linkPackage($constraintPath, $initialPath);
             return;
         }
 
         $this->downloadManager->download($target, $targetSavePath, 'source' === $installationSource);
         $this->linkPackage($targetSavePath, $constraintPath);
-        $this->linkPackage($constraintPath, $initialDownloadPath);
+        $this->linkPackage($constraintPath, $initialPath);
     }
 
     protected function removeCode($package)
@@ -201,14 +205,15 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     public function getPackageSavePath(PackageInterface $package)
     {
-        $version = $package->isDev() ? ($package->getSourceReference() ?: 'dev-master') : $package->getPrettyVersion();
+        $devVersion = substr($package->getSourceReference(), 0, 7) ?: 'dev-master';
+        $version = $package->isDev() ? $devVersion : $package->getPrettyVersion();
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $package->getName() .'/'. $version;
     }
 
-    protected function getConstraintPath()
+    protected function getConstraintPath($package = null)
     {
-        $version = strtr(Plugin::getInstance()->getRequestedPackage(), self::$transOpName);
-        $version = preg_replace('/ +/', '_', $version);
+        $version = $package ? $package->getName() .'/'. $package->getPrettyVersion() : Plugin::getInstance()->getRequestedPackage();
+        $version = preg_replace('/ +/', '_', strtr($version, self::$transOpName));
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $version;
     }
 }
