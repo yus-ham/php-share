@@ -3,7 +3,7 @@ Sharing common used composer package to multiple projects by symlink.
 
 # Install globally
 ~~~bash
-composer g require supham/php-share:@dev
+composer g require supham/php-share
 ~~~
 
 # Library Installers
