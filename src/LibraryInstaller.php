@@ -8,7 +8,6 @@ use Symfony\Component\Filesystem\Filesystem;
 
 class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 {
-    protected $fs;
     protected $sharedVendorDir = 'shared';
 
     private static $transOpName = [
@@ -41,7 +40,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         } else {
             parent::__construct($io, $composer, $type);
         }
-        $this->fs = new Filesystem();
     }
 
     private static function isPlugin(PackageInterface $package)
@@ -138,7 +136,9 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         $constraintPath = $this->getConstraintPath($target);
 
         if (is_dir($targetSavePath)) {
+            if ($targetSavePath !== $constraintPath) {
             $this->linkPackage($targetSavePath, $constraintPath);
+            }
             $this->linkPackage($constraintPath, $initialPath);
             return;
         }
@@ -174,7 +174,10 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
 
         $this->downloadManager->download($target, $targetSavePath, 'source' === $installationSource);
+
+        if ($targetSavePath !== $constraintPath) {
         $this->linkPackage($targetSavePath, $constraintPath);
+        }
         $this->linkPackage($constraintPath, $initialPath);
     }
 
@@ -188,17 +191,17 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     {
         $this->filesystem->ensureDirectoryExists(dirname($link));
         $this->filesystem->removeDirectory($link);
+        $relativePath = $this->filesystem->findShortestPath($link, $target);
 
         if (Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
             $cwd = getcwd();
-            $relativePath = $this->filesystem->findShortestPath($link, $target);
             chdir(dirname($link));
-            $this->io->writeError("\n    [php-share] Junctioning $target -> $link\n", false);
+            $this->io->writeError("\n    [php-share] Junctioning $relativePath -> $link\n", false);
             $this->filesystem->junction($link, $relativePath);
             chdir($cwd);
         } else {
-            $this->io->writeError("\n    [php-share] Symlinking $target -> $link\n", false);
+            $this->io->writeError("\n    [php-share] Symlinking $relativePath -> $link\n", false);
             $this->filesystem->relativeSymlink($target, $link);
         }
     }
