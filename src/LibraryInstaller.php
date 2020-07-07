@@ -59,10 +59,10 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
         try {
             $installers = require __DIR__.'/installers.php';
-            $prefix = $this->vendorDir .'/'. $package->getName();
 
             foreach ($installers as $file) {
-                $file = $prefix .'/'. $file;
+                $file = $this->vendorDir .'/'. $file;
+
                 if (is_file($file)) {
                     $this->injectInstallerCode($file);
                 }
