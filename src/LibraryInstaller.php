@@ -137,7 +137,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
         if (is_dir($targetSavePath)) {
             if ($targetSavePath !== $constraintPath) {
-            $this->linkPackage($targetSavePath, $constraintPath);
+                $this->linkPackage($targetSavePath, $constraintPath);
             }
             $this->linkPackage($constraintPath, $initialPath);
             return;
@@ -196,9 +196,10 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         if (Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
             $cwd = getcwd();
+            $link = str_replace('\\', '/', $link);
             chdir(dirname($link));
             $this->io->writeError("\n    [php-share] Junctioning $relativePath -> $link\n", false);
-            $this->filesystem->junction($link, $relativePath);
+            $this->filesystem->junction($relativePath, $link);
             chdir($cwd);
         } else {
             $this->io->writeError("\n    [php-share] Symlinking $relativePath -> $link\n", false);

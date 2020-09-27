@@ -46,6 +46,9 @@ class Plugin implements
         ];
     }
 
+    /**
+     * @param \Composer\Installer\PackageEvent $event
+     */
     public function prePackageInstall($event)
     {
         $reason = $event->getOperation()->getReason();
