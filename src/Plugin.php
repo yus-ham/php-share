@@ -54,15 +54,20 @@ class Plugin implements
         $reason = $event->getOperation()->getReason();
 
         if (!$reason instanceof Rule) {
-            $package = null;
-        } elseif ($job = $reason->getJob()) {
-            $package = $job['packageName'] .'/'. $job['constraint']->getPrettyString();
-        } elseif ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
-            $package = $reasonData->getName() .'/'. $reasonData->getPrettyVersion();
-        } elseif (is_object($reasonData)) {
-            $package = $reasonData->getTarget() .'/'. $reasonData->getConstraint()->getPrettyString();
+            return;
         }
-        $this->requestedPackage = $package;
+
+        if ($job = $reason->getJob()) {
+            $name = $job['packageName'];
+            $const = $job['constraint']->getPrettyString();
+        } elseif ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
+            $name = $reasonData->getName();
+            $const = $reasonData->getPrettyVersion();
+        } elseif (is_object($reasonData)) {
+            $name = $reasonData->getTarget();
+            $const = $reasonData->getConstraint()->getPrettyString();
+        }
+        $this->requestedPackage = $name .'/'. substr(sha1($const), 10);
     }
 
     public function getRequestedPackage()

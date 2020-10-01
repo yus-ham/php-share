@@ -10,23 +10,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 {
     protected $sharedVendorDir = 'shared';
 
-    private static $transOpName = [
-        '==' => 'eq',
-        '='  => 'eq',
-        '>=' => 'ge',
-        '<=' => 'le',
-        '<'  => 'lt',
-        '>'  => 'gt',
-        '<>' => 'ne',
-        '!=' => 'ne',
-        '^'  => 'hat',
-        '*'  => 'any',
-        ' || ' => ' or ',
-        ' | '  => ' or ',
-        '||'   => ' or ',
-        '|'    => ' or ',
-    ];
-
     public function __construct($io, $composer, $type = 'library', $old = null)
     {
         if ($old) {
@@ -217,7 +200,6 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     protected function getConstraintPath($package = null)
     {
         $version = $package ? $package->getName() .'/'. $package->getPrettyVersion() : Plugin::getInstance()->getRequestedPackage();
-        $version = preg_replace('/ +/', '_', strtr($version, self::$transOpName));
-        return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $version;
+        return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/$version";
     }
 }
