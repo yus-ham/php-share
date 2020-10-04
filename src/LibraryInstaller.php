@@ -4,7 +4,6 @@ namespace Supham\Phpshare\Composer;
 use Composer\Package\PackageInterface;
 use Composer\Repository\InstalledRepositoryInterface;
 use Composer\Util\Platform;
-use Symfony\Component\Filesystem\Filesystem;
 
 class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 {
@@ -159,7 +158,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         $this->downloadManager->download($target, $targetSavePath, 'source' === $installationSource);
 
         if ($targetSavePath !== $constraintPath) {
-        $this->linkPackage($targetSavePath, $constraintPath);
+            $this->linkPackage($targetSavePath, $constraintPath);
         }
         $this->linkPackage($constraintPath, $initialPath);
     }

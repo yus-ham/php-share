@@ -67,7 +67,7 @@ class Plugin implements
             $name = $reasonData->getTarget();
             $const = $reasonData->getConstraint()->getPrettyString();
         }
-        $this->requestedPackage = $name .'/'. substr(sha1($const), 10);
+        $this->requestedPackage = $name .'/con-'. substr(sha1($const), 0, 10);
     }
 
     public function getRequestedPackage()
