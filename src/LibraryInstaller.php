@@ -96,7 +96,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     protected function installCode($package)
     {
         $savePath = $this->getPackageSavePath($package);
-        $constraintPath = $this->getConstraintPath();
+        $constraintPath = $this->getConstraintPath($package);
         $packagePath = $this->getInstallPath($package);
 
         if (!is_dir($savePath)) {
@@ -111,10 +111,17 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         $this->linkPackage($constraintPath, $packagePath);
     }
 
+    protected function getInitialPackageDownloader()
+    {
+        return Plugin::$isV1
+            ? $this->downloadManager->getDownloaderForInstalledPackage($initial)
+            : $this->downloadManager->getDownloaderForPackage($initial);
+    }
+
     protected function updateCode($initial, $target)
     {
-        $initialPath = $this->getInstallPath($initial); // vend/lib
-        $targetSavePath = $this->getPackageSavePath($target); // shared/ven/lib
+        $initialPath = $this->getInstallPath($initial); // vend/name
+        $targetSavePath = $this->getPackageSavePath($target); // shared/ven/name
         $constraintPath = $this->getConstraintPath($target);
 
         if (is_dir($targetSavePath)) {
@@ -126,7 +133,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
 
         $initial->setInstallationSource($initial->getInstallationSource() ?: 'dist');
-        $downloader = $this->downloadManager->getDownloaderForInstalledPackage($initial);
+        $downloader = $this->getInitialPackageDownloader($initial);
 
         if (!$downloader) {
             return;
@@ -189,6 +196,9 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
     }
 
+    /**
+     * Get actual saving path 
+     */
     public function getPackageSavePath(PackageInterface $package)
     {
         $devVersion = substr($package->getSourceReference(), 0, 7) ?: 'dev-master';
@@ -198,7 +208,23 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 
     protected function getConstraintPath($package = null)
     {
-        $version = $package ? $package->getName() .'/'. $package->getPrettyVersion() : Plugin::getInstance()->getRequestedPackage();
+        $version = Plugin::getInstance()->getRequestedPackage();
+
+        if ($package) {
+            $name = $package->getName();
+
+            if (is_array($version)) {
+                if (isset($version[$name])) {
+                    $version = $version[$name];
+                } else {
+                    $version = $version[0];
+                }
+            }
+        }
+        elseif (is_array($version)) {
+            $version = $version[0];
+        }
+
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/$version";
     }
 }

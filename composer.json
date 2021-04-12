@@ -14,10 +14,10 @@
         "source": "https://github.com/sup-ham/php-share"
     },
     "require": {
-        "composer-plugin-api": "^1.0"
+        "composer-plugin-api": "*"
     },
     "require-dev": {
-        "composer/composer": "^1"
+        "composer/composer": "*"
     },
     "autoload": {
         "psr-4": {

@@ -14,15 +14,18 @@ class Plugin implements
     EventSubscriberInterface,
     PluginInterface
 {
-    protected $composer;
+    /** @var \Composer\Composer */
+    protected static $composer;
+    protected static $isV1;
     protected $io;
     private $requestedPackage;
 
     public function activate($composer, $io)
     {
         $GLOBALS['Supham\Phpshare\Composer\Plugin'] = $this;
+        self::$composer = $composer;
+        self::$isV1 = strpos(self::$composer->getVersion(), '1.') === 0;
         $this->io = $io;
-        $this->composer = $composer;
         $this->setLibraryInstaller();
     }
 
@@ -33,9 +36,9 @@ class Plugin implements
 
     protected function setLibraryInstaller()
     {
-        $manager = $this->composer->getInstallationManager();
+        $manager = self::$composer->getInstallationManager();
         $oldInstaller = $manager->getInstaller(null);
-        $libInstaller = new LibraryInstaller($this->io, $this->composer, null, $oldInstaller);
+        $libInstaller = new LibraryInstaller($this->io, self::$composer, null, $oldInstaller);
         $manager->addInstaller($libInstaller);
     }
 
@@ -43,7 +46,29 @@ class Plugin implements
     {
         return [
             'pre-package-install' => 'prePackageInstall',
+            'command' => 'preCommand',
         ];
+    }
+
+    /**
+     * @param \Composer\Plugin\CommandEvent $event
+     */
+    public function preCommand($event)
+    {
+        if ($event->getCommandName() !== 'require') {
+            return;
+        }
+        $cmd = new ReqCommand();
+
+        $reqs = $cmd->pubDetermineRequirements(
+            $event->getInput(),
+            $event->getOutput(),
+            self::$composer
+        );
+
+        foreach ($reqs as $name => $version) {
+            $this->requestedPackage[$name] = $name .'/con-'. substr(sha1($version), 0, 10);
+        }
     }
 
     /**
@@ -51,23 +76,40 @@ class Plugin implements
      */
     public function prePackageInstall($event)
     {
+        $package = $event->getOperation()->getPackage();
+
+        if (!self::$isV1) {
+            $name = $package->getName();
+            $version = $package->getPrettyVersion();
+            return $this->requestedPackage[0] = $name .'/con-'. substr(sha1($version), 0, 10);
+        }
+
         $reason = $event->getOperation()->getReason();
 
-        if (!$reason instanceof Rule) {
+        if (!($reason instanceof Rule)) {
             return;
         }
 
         if ($job = $reason->getJob()) {
-            $name = $job['packageName'];
-            $const = $job['constraint']->getPrettyString();
-        } elseif ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
-            $name = $reasonData->getName();
-            $const = $reasonData->getPrettyVersion();
-        } elseif (is_object($reasonData)) {
-            $name = $reasonData->getTarget();
-            $const = $reasonData->getConstraint()->getPrettyString();
+            return $this->setRequestedPackage($job['packageName'], $job['constraint']->getPrettyString());
         }
-        $this->requestedPackage = $name .'/con-'. substr(sha1($const), 0, 10);
+
+        if ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
+            return $this->setRequestedPackage($reasonData->getName(), $reasonData->getPrettyVersion());
+        }
+
+        if (is_object($reasonData)) {
+            return $this->setRequestedPackage($reasonData->getTarget(), $reasonData->getConstraint()->getPrettyString());
+        }
+    }
+
+    protected function setRequestedPackage($name, $version)
+    {
+        if (self::$isV1) {
+            $this->requestedPackage = $name .'/con-'. substr(sha1($version), 0, 10);
+        } else {
+            $this->requestedPackage[$name] = $name .'/con-'. substr(sha1($version), 0, 10);
+        }
     }
 
     public function getRequestedPackage()
