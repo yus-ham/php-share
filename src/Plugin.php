@@ -1,37 +1,32 @@
 <?php
 namespace Supham\Phpshare\Composer;
 
-use Composer\DependencyResolver\Rule;
 use Composer\EventDispatcher\EventSubscriberInterface;
-use Composer\Package\AliasPackage;
-use Composer\Plugin\Capability\CommandProvider;
-use Composer\Plugin\Capable;
 use Composer\Plugin\PluginInterface;
 
 class Plugin implements
-    Capable,
-    CommandProvider,
     EventSubscriberInterface,
     PluginInterface
 {
     /** @var \Composer\Composer */
     protected static $composer;
     protected static $isV1;
+    public static $packagesToInstall = [];
     protected $io;
-    private $requestedPackage;
 
     public function activate($composer, $io)
     {
-        $GLOBALS['Supham\Phpshare\Composer\Plugin'] = $this;
         self::$composer = $composer;
-        self::$isV1 = strpos(self::$composer->getVersion(), '1.') === 0;
         $this->io = $io;
         $this->setLibraryInstaller();
     }
 
-    public static function getInstance()
+    public function deactivate(\Composer\Composer $composer, \Composer\IO\IOInterface $io)
     {
-        return $GLOBALS['Supham\Phpshare\Composer\Plugin'];
+    }
+
+    public function uninstall(\Composer\Composer $composer, \Composer\IO\IOInterface $io)
+    {
     }
 
     protected function setLibraryInstaller()
@@ -44,86 +39,39 @@ class Plugin implements
 
     public static function getSubscribedEvents()
     {
+        if (!self::$composer) {
+            return [];
+        }
+
         return [
-            'pre-package-install' => 'prePackageInstall',
-            'command' => 'preCommand',
+            'pre-pool-create' => 'prePoolCreate',
+            'pre-operations-exec' => 'preOpsExec',
         ];
     }
 
     /**
-     * @param \Composer\Plugin\CommandEvent $event
+     * @param \Composer\Plugin\PrePoolCreateEvent $event
      */
-    public function preCommand($event)
+    public function prePoolCreate($event)
     {
-        if ($event->getCommandName() !== 'require') {
-            return;
-        }
-        $cmd = new ReqCommand();
+        /** @var \Composer\Semver\Constraint\ConstraintInterface $constraint */
+        foreach ($event->getLoadedPackages() as $name => $constraint) {
+            $version = $constraint->getPrettyString();
 
-        $reqs = $cmd->pubDetermineRequirements(
-            $event->getInput(),
-            $event->getOutput(),
-            self::$composer
-        );
+            if (strlen($version) < 2) {
+                continue;
+            }
 
-        foreach ($reqs as $name => $version) {
-            $this->requestedPackage[$name] = $name .'/con-'. substr(sha1($version), 0, 10);
+            Plugin::$packagesToInstall[$name] = $version;
         }
     }
 
-    /**
-     * @param \Composer\Installer\PackageEvent $event
-     */
-    public function prePackageInstall($event)
+    public function preOpsExec()
     {
-        $package = $event->getOperation()->getPackage();
-
-        if (!self::$isV1) {
-            $name = $package->getName();
-            $version = $package->getPrettyVersion();
-            return $this->requestedPackage[0] = $name .'/con-'. substr(sha1($version), 0, 10);
+        foreach (glob(self::$composer->getConfig()->get('vendor-dir')."/*/*") as $lib) {
+            if (!is_dir($lib)) {
+                @unlink($lib);
+            }
         }
-
-        $reason = $event->getOperation()->getReason();
-
-        if (!($reason instanceof Rule)) {
-            return;
-        }
-
-        if ($job = $reason->getJob()) {
-            return $this->setRequestedPackage($job['packageName'], $job['constraint']->getPrettyString());
-        }
-
-        if ($reasonData = $reason->getReasonData() and $reasonData instanceof AliasPackage) {
-            return $this->setRequestedPackage($reasonData->getName(), $reasonData->getPrettyVersion());
-        }
-
-        if (is_object($reasonData)) {
-            return $this->setRequestedPackage($reasonData->getTarget(), $reasonData->getConstraint()->getPrettyString());
-        }
-    }
-
-    protected function setRequestedPackage($name, $version)
-    {
-        if (self::$isV1) {
-            $this->requestedPackage = $name .'/con-'. substr(sha1($version), 0, 10);
-        } else {
-            $this->requestedPackage[$name] = $name .'/con-'. substr(sha1($version), 0, 10);
-        }
-    }
-
-    public function getRequestedPackage()
-    {
-        return $this->requestedPackage;
-    }
-
-    public function getCapabilities()
-    {
-        return [CommandProvider::class => __CLASS__];
-    }
-
-    public function getCommands()
-    {
-        return [new ClearOrphanedCommand()];
     }
 }

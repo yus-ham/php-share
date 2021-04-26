@@ -2,8 +2,6 @@
 namespace Supham\Phpshare\Composer;
 
 use Composer\Package\PackageInterface;
-use Composer\Repository\InstalledRepositoryInterface;
-use Composer\Util\Platform;
 
 class LibraryInstaller extends \Composer\Installer\LibraryInstaller
 {
@@ -24,156 +22,40 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
     }
 
-    private static function isPlugin(PackageInterface $package)
+    protected function afterInstall($path)
     {
-        return $package->getType() === 'composer-plugin';
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
-    {
-        parent::install($repo, $package);
-
-        if (!self::isPlugin($package)) {
-            return;
-        }
-        try {
-            $installers = require __DIR__.'/installers.php';
-
-            foreach ($installers as $file) {
-                $file = $this->vendorDir .'/'. $file;
-
-                if (is_file($file)) {
-                    $this->injectInstallerCode($file);
-                }
-            }
-            $this->composer->getPluginManager()->registerPackage($package, true);
-
-        } catch (\Exception $e) {
-            // Rollback installation
-            $this->io->writeError('Plugin installation failed, rolling back');
-            parent::uninstall($repo, $package);
-            throw $e;
-        }
-    }
-
-    protected function injectInstallerCode($file)
-    {
-        $class = __CLASS__;
-        $code = file_get_contents($file);
-        $replacement = ""
-            .PHP_EOL . "// begin php-share plugin code"
-            .PHP_EOL . "if (class_exists('$class', false)) { class LibraryInstallerBase extends \\$class {} }"
-            .PHP_EOL . "else { class LibraryInstallerBase extends \Composer\Installer\LibraryInstaller {} }"
-            .PHP_EOL . "// end php-share plugin code"
-            .PHP_EOL . PHP_EOL . '$0Base';
-
-        $code = preg_replace('/class\s+\w+\s+extends\s+LibraryInstaller\b/s', $replacement, $code);
-        file_put_contents($file, $code);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public function update(InstalledRepositoryInterface $repo, PackageInterface $initial, PackageInterface $target)
-    {
-        if ($isPlugin = self::isPlugin($target)) {
-            $extra = $target->getExtra();
-            if (empty($extra['class'])) {
-                throw new \UnexpectedValueException('Error while installing '.$target->getPrettyName().', composer-plugin packages should have a class defined in their extra key to be usable.');
-            }
-        }
-
-        parent::update($repo, $initial, $target);
-
-        if ($isPlugin) {
-            $this->composer->getPluginManager()->registerPackage($target, true);
-        }
+        $this->linkPackage($path['savePath'], $path['constraintPath']);
+        $this->linkPackage($path['constraintPath'], $path['packagePath']);
     }
 
     protected function installCode($package)
     {
-        $savePath = $this->getPackageSavePath($package);
-        $constraintPath = $this->getConstraintPath($package);
-        $packagePath = $this->getInstallPath($package);
+        $path['savePath'] = $this->getSavePath($package); // <shared>/vend/name/vers
+        $path['constraintPath'] = $this->getConstraintPath($package); // <shared>/vend/name/constraint
+        $path['packagePath'] = $this->getInstallPath($package); // <project>/vend/name
 
-        if (!is_dir($savePath)) {
-            @unlink($savePath);
-            @unlink($constraintPath);
-            $this->downloadManager->download($package, $savePath);
+        if (!is_file("$path[savePath]/composer.json")) {
+            if ($promise = $this->downloadManager->install($package, $path['savePath'])) {
+                return $promise->then(function() use($path) { $this->afterInstall($path); });
+            }
+        } else {
+            $this->afterInstall($path);
         }
-        if (!is_dir($constraintPath)) {
-            @unlink($constraintPath);
-            $this->linkPackage($savePath, $constraintPath);
-        }
-        $this->linkPackage($constraintPath, $packagePath);
-    }
-
-    protected function getInitialPackageDownloader()
-    {
-        return Plugin::$isV1
-            ? $this->downloadManager->getDownloaderForInstalledPackage($initial)
-            : $this->downloadManager->getDownloaderForPackage($initial);
     }
 
     protected function updateCode($initial, $target)
     {
-        $initialPath = $this->getInstallPath($initial); // vend/name
-        $targetSavePath = $this->getPackageSavePath($target); // shared/ven/name
-        $constraintPath = $this->getConstraintPath($target);
+        $path['packagePath'] = $this->getInstallPath($initial);
+        $path['savePath'] = $this->getSavePath($target);
+        $path['constraintPath'] = $this->getConstraintPath($target);
 
-        if (is_dir($targetSavePath)) {
-            if ($targetSavePath !== $constraintPath) {
-                $this->linkPackage($targetSavePath, $constraintPath);
+        if (!is_file("$path[savePath]/composer.json")) {
+            if ($promise = $this->downloadManager->install($target, $path['savePath'])) {
+                return $promise->then(function () use ($path) { $this->afterInstall($path); });
             }
-            $this->linkPackage($constraintPath, $initialPath);
-            return;
-        }
-
-        $initial->setInstallationSource($initial->getInstallationSource() ?: 'dist');
-        $downloader = $this->getInitialPackageDownloader($initial);
-
-        if (!$downloader) {
-            return;
-        }
-
-        $this->filesystem->removeDirectory($initialPath);
-        $installationSource = $initial->getInstallationSource();
-
-        if ('dist' === $installationSource) {
-            $initialType = $initial->getDistType();
-            $targetType = $target->getDistType();
         } else {
-            $initialType = $initial->getSourceType();
-            $targetType = $target->getSourceType();
+            $this->afterInstall($path);
         }
-
-        if (is_file($targetSavePath)) {
-            @unlink($targetSavePath);
-        }
-
-        // upgrading from a dist stable package to a dev package, force source reinstall
-        if ($target->isDev() && 'dist' === $installationSource) {
-            $this->downloadManager->download($target, $targetSavePath);
-            $this->linkPackage($targetSavePath, $constraintPath);
-            $this->linkPackage($constraintPath, $initialPath);
-            return;
-        }
-
-        $this->downloadManager->download($target, $targetSavePath, 'source' === $installationSource);
-
-        if ($targetSavePath !== $constraintPath) {
-            $this->linkPackage($targetSavePath, $constraintPath);
-        }
-        $this->linkPackage($constraintPath, $initialPath);
-    }
-
-    protected function removeCode($package)
-    {
-        $installPath = $this->getInstallPath($package);
-        $this->filesystem->removeDirectory($installPath);
     }
 
     protected function linkPackage($target, $link)
@@ -182,7 +64,7 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         $this->filesystem->removeDirectory($link);
         $relativePath = $this->filesystem->findShortestPath($link, $target);
 
-        if (Platform::isWindows()) {
+        if (\Composer\Util\Platform::isWindows()) {
             // Implement symlinks as NTFS junctions on Windows
             $cwd = getcwd();
             $link = str_replace('\\', '/', $link);
@@ -199,32 +81,26 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
     /**
      * Get actual saving path 
      */
-    public function getPackageSavePath(PackageInterface $package)
+    public function getSavePath(PackageInterface $package)
     {
-        $devVersion = substr($package->getSourceReference(), 0, 7) ?: 'dev-master';
-        $version = $package->isDev() ? $devVersion : $package->getPrettyVersion();
+        $version = $package->isDev()
+            ? (substr($package->getSourceReference(), 0, 7) ?: 'dev-master')
+            : $package->getPrettyVersion();
+
         return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/". $package->getName() .'/'. $version;
     }
 
-    protected function getConstraintPath($package = null)
+    /** @var \Composer\Package\BasePackage $package */
+    protected function getConstraintPath($package)
     {
-        $version = Plugin::getInstance()->getRequestedPackage();
+        $name = $package->getName();
 
-        if ($package) {
-            $name = $package->getName();
-
-            if (is_array($version)) {
-                if (isset($version[$name])) {
-                    $version = $version[$name];
-                } else {
-                    $version = $version[0];
-                }
-            }
-        }
-        elseif (is_array($version)) {
-            $version = $version[0];
+        if (isset(Plugin::$packagesToInstall[$name])) {
+            $version = Plugin::$packagesToInstall[$name];
+        } else {
+            $version = $package->getPrettyVersion();
         }
 
-        return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/$version";
+        return $this->composer->getConfig()->get('data-dir') ."/{$this->sharedVendorDir}/$name/con-". substr(md5($version), 0, 10);
     }
 }
