@@ -68,9 +68,9 @@ class Plugin implements
 
     public function preOpsExec()
     {
-        foreach (glob(self::$composer->getConfig()->get('vendor-dir')."/*/*") as $lib) {
-            if (!is_dir($lib)) {
-                @unlink($lib);
+        foreach (glob(self::$composer->getConfig()->get('vendor-dir')."/*/*") as $path) {
+            if (!file_exists($path)) {
+                @unlink($path);
             }
         }
     }
