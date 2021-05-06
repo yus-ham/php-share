@@ -22,6 +22,70 @@ class LibraryInstaller extends \Composer\Installer\LibraryInstaller
         }
     }
 
+    private static function isPlugin(PackageInterface $package)
+    {
+        return $package->getType() === 'composer-plugin';
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function install(InstalledRepositoryInterface $repo, PackageInterface $package)
+    {
+        $promise = parent::install($repo, $package);
+
+        if (!self::isPlugin($package)) {
+            return $promise;
+        }
+
+        $afterInstall = function() use($repo, $package) {
+            try {
+                $installers = require __DIR__.'/installers.php';
+
+                foreach ($installers as $file) {
+                    $file = $this->vendorDir .'/'. $file;
+
+                    if (is_file($file)) {
+                        $this->injectInstallerCode($file);
+                    }
+                }
+                $this->composer->getPluginManager()->registerPackage($package, true);
+            } catch (\Exception $e) {
+                // Rollback installation
+                $this->io->writeError('Plugin installation failed, rolling back');
+
+                try {
+                    parent::uninstall($repo, $package);
+                } catch (\Exception $e) {
+                }
+
+                throw $e;
+            }
+        };
+
+        try {
+            return $promise->then($afterInstall);
+        } catch (\Exception $e) {
+            $afterInstall();
+            return $promise;
+        }
+    }
+
+    protected function injectInstallerCode($file)
+    {
+        $class = __CLASS__;
+        $code = file_get_contents($file);
+        $replacement = ""
+            .PHP_EOL . "/** begin php-share plugin injected code **/"
+            .PHP_EOL . "if (class_exists('$class', false)) { class LibraryInstallerBase extends \\$class {} }"
+            .PHP_EOL . "else { class LibraryInstallerBase extends \Composer\Installer\LibraryInstaller {} }"
+            .PHP_EOL . "/** end php-share plugin injected code **/"
+            .PHP_EOL . PHP_EOL . '$0Base';
+
+        $code = preg_replace('/class\s+\w+\s+extends\s+LibraryInstaller\b/s', $replacement, $code);
+        file_put_contents($file, $code);
+    }
+
     protected function afterInstall($path)
     {
         $this->linkPackage($path['savePath'], $path['constraintPath']);
