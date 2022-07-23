@@ -1,5 +1,9 @@
+>NOTE:
+><i>Discontinued in favor of [iwink/composer-global-installer](https://github.com/iwink/composer-global-installer)</i>
+
 # php-share composer plugin
 Sharing common used composer package to multiple projects by symlink.
+
 
 # Install globally
 ~~~bash
